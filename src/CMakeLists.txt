@@ -35,6 +35,7 @@ if (NOT JPEG_FOUND)
 endif()
 
 find_package(Python3 COMPONENTS Interpreter Development)
+set(pybind11_DIR /home/xujg/anaconda3/lib/python3.9/site-packages/pybind11/share/cmake/pybind11)
 find_package(pybind11 CONFIG)
 if(Python3_Development_FOUND AND BUILD_SHARED_LIBS AND pybind11_FOUND)
   pybind11_add_module(pyopenpano python/pybind.cc)

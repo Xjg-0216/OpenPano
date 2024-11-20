@@ -197,42 +197,167 @@ void fill(Mat32f& mat, float c) {
 	}
 }
 
-Mat32f crop(const Mat32f& mat) {
-	int w = mat.width(), h = mat.height();
-	vector<int> height(w, 0),
-		left(w), right(w);
-	int maxarea = 0;
-	int ll = 0, rr = 0, hh = 0, nl = 0;
-	REP(line, h) {
-		REP(k, w) {
-			const float* p = mat.ptr(line, k);
-			float m = max(max(p[0], p[1]), p[2]);
-			height[k] = m < 0 ? 0 : height[k] + 1;	// find Color::NO
-		}
+// Mat32f crop(const Mat32f& mat) {
+// 	int w = mat.width(), h = mat.height();
+// 	vector<int> height(w, 0),
+// 		left(w), right(w);
+// 	int maxarea = 0;
+// 	int ll = 0, rr = 0, hh = 0, nl = 0;
+// 	REP(line, h) {
+// 		REP(k, w) {
+// 			const float* p = mat.ptr(line, k);
+// 			float m = max(max(p[0], p[1]), p[2]);
+// 			height[k] = m < 0 ? 0 : height[k] + 1;	// find Color::NO
+// 		}
 
-		REP(k, w) {
-			left[k] = k;
-			while (left[k] > 0 && height[k] <= height[left[k] - 1])
-				left[k] = left[left[k] - 1];
-		}
-		REPD(k, w - 1, 0) {
-			right[k] = k;
-			while (right[k] < w - 1 && height[k] <= height[right[k] + 1])
-				right[k] = right[right[k] + 1];
-		}
-		REP(k, w)
-			if (update_max(maxarea, (right[k] - left[k] + 1) * height[k]))
-				ll = left[k], rr = right[k], hh = height[k], nl = line;
-	}
-	Mat32f ret(hh, rr - ll + 1, 3);
-	int offsetx = ll, offsety = nl - hh + 1;
+// 		REP(k, w) {
+// 			left[k] = k;
+// 			while (left[k] > 0 && height[k] <= height[left[k] - 1])
+// 				left[k] = left[left[k] - 1];
+// 		}
+// 		REPD(k, w - 1, 0) {
+// 			right[k] = k;
+// 			while (right[k] < w - 1 && height[k] <= height[right[k] + 1])
+// 				right[k] = right[right[k] + 1];
+// 		}
+// 		REP(k, w)
+// 			if (update_max(maxarea, (right[k] - left[k] + 1) * height[k]))
+// 				ll = left[k], rr = right[k], hh = height[k], nl = line;
+// 	}
+// 	Mat32f ret(hh, rr - ll + 1, 3);
+// 	int offsetx = ll, offsety = nl - hh + 1;
+// 	REP(i, ret.height()) {
+// 		float* dst = ret.ptr(i, 0);
+// 		const float* src = mat.ptr(i + offsety, offsetx);
+// 		memcpy(dst, src, 3 * ret.width() * sizeof(float));
+// 	}
+// 	return ret;
+// }
+
+
+Mat32f crop(const Mat32f& mat) {
+    int w = mat.width(), h = mat.height();
+    vector<int> height(w, 0), left(w), right(w);
+    int maxarea = 0;
+    int ll = 0, rr = 0, hh = 0, nl = 0;
+
+    // 找到最大有效区域
+    REP(line, h) {
+        REP(k, w) {
+            const float* p = mat.ptr(line, k);
+            float m = max(max(p[0], p[1]), p[2]);
+            height[k] = m < 0 ? 0 : height[k] + 1; // find Color::NO
+        }
+
+        REP(k, w) {
+            left[k] = k;
+            while (left[k] > 0 && height[k] <= height[left[k] - 1])
+                left[k] = left[left[k] - 1];
+        }
+
+        REPD(k, w - 1, 0) {
+            right[k] = k;
+            while (right[k] < w - 1 && height[k] <= height[right[k] + 1])
+                right[k] = right[right[k] + 1];
+        }
+
+        REP(k, w)
+            if (update_max(maxarea, (right[k] - left[k] + 1) * height[k]))
+                ll = left[k], rr = right[k], hh = height[k], nl = line;
+    }
+
+    // 计算裁剪区域的宽度和高度
+    int crop_width = rr - ll + 1;
+    int crop_height = hh;
+
+    // 如果有效区域大于 512x512，选择裁剪为 512x512 中心区域
+    int target_width = 512;
+    int target_height = 512;
+
+    int offsetx = ll, offsety = nl - hh + 1;
+
+    // 如果有效区域宽度大于目标宽度，选择中心部分
+    if (crop_width > target_width) {
+        int midx = ll + crop_width / 2;
+        offsetx = midx - target_width / 2;
+        crop_width = target_width;
+    }
+
+    // 如果有效区域高度大于目标高度，选择中心部分
+    if (crop_height > target_height) {
+        int midy = nl - hh + 1 + crop_height / 2;
+        offsety = midy - target_height / 2;
+        crop_height = target_height;
+    }
+
+    // // 如果有效区域小于目标尺寸，扩展为目标尺寸
+    // if (crop_width < target_width) {
+    //     offsetx = ll;  // 保持左边界为有效区域的起始位置
+    //     crop_width = target_width; // 扩展到目标宽度
+    // }
+    // if (crop_height < target_height) {
+    //     offsety = nl - hh + 1;  // 保持上边界为有效区域的起始位置
+    //     crop_height = target_height; // 扩展到目标高度
+    // }
+
+    // // 创建裁剪后的图像
+    // Mat32f ret(crop_height, crop_width, 3);
+
+    // // 拷贝裁剪区域的像素
+    // REP(i, ret.height()) {
+    //     float* dst = ret.ptr(i, 0);
+    //     const float* src = mat.ptr(i + offsety, offsetx);
+    //     memcpy(dst, src, 3 * ret.width() * sizeof(float));
+    // }
+
+    // return ret;
+
+	// 如果有效区域小于目标尺寸，扩展为目标尺寸
+    int extend_left = 0, extend_right = 0, extend_top = 0, extend_bottom = 0;
+
+    if (crop_width < target_width) {
+        extend_left = (target_width - crop_width) / 2;
+        extend_right = target_width - crop_width - extend_left;
+        crop_width = target_width;
+    }
+    if (crop_height < target_height) {
+        extend_top = (target_height - crop_height) / 2;
+        extend_bottom = target_height - crop_height - extend_top;
+        crop_height = target_height;
+    }
+
+    // 创建裁剪后的图像
+    Mat32f ret(crop_height, crop_width, 3);
+
+    // // 初始化为黑色（或指定颜色），扩展区域填充
+    // REP(i, ret.height()) {
+    //     float* dst = ret.ptr(i, 0);
+
+	// 	const float* src = mat.ptr(i + offsety - extend_top, offsetx - extend_left);
+	// 	memcpy(dst, src, 3 * (crop_width) * sizeof(float));
+    // }
+
+    // return ret;
+
+
 	REP(i, ret.height()) {
 		float* dst = ret.ptr(i, 0);
-		const float* src = mat.ptr(i + offsety, offsetx);
-		memcpy(dst, src, 3 * ret.width() * sizeof(float));
+		memset(dst, 0, 3 * crop_width * sizeof(float)); 
+
+		int src_row = i + offsety - extend_top;
+		if (src_row >= 0 && src_row < mat.height()) { // 检查源行是否有效
+			const float* src = mat.ptr(src_row, offsetx - extend_left);
+			int valid_width = min(crop_width, mat.width() - (offsetx - extend_left));
+			if (valid_width > 0) {
+				memcpy(dst, src, 3 * valid_width * sizeof(float));
+			}
+		}
 	}
+
 	return ret;
 }
+
+
 
 Mat32f rgb2grey(const Mat32f& mat) {
 	m_assert(mat.channels() == 3);
